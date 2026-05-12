@@ -277,9 +277,7 @@ Indexes: unique `email`, `owner`, `members`, `project + status`, `assignee + due
 
 ## Deployment
 
-Backend → **Railway**, frontend → **Netlify**, database → **MongoDB Atlas** (already set up).
-
-The frontend uses a same-origin proxy via `netlify.toml`, so all API calls go through `https://your-app.netlify.app/api/*` and Netlify rewrites them to the Railway backend. This keeps the refresh cookie first-party and SameSite=Lax — no CORS gymnastics.
+Everything runs on a single **Railway** service: the Node/Express server serves both the `/api/*` routes and the compiled React app from `client/dist`. Database stays on **MongoDB Atlas**. One URL, no CORS, no cross-domain cookie config.
 
 ### 1 · Push to GitHub
 
@@ -294,54 +292,41 @@ git push -u origin main
 
 `.env` is already in `.gitignore` — credentials won't be pushed.
 
-### 2 · Deploy the backend to Railway
+### 2 · Deploy to Railway
 
-1. Sign in at **railway.app** → **New Project → Deploy from GitHub**.
-2. Pick the repo, then in service settings set **Root Directory** to `server`. (Railway will detect `railway.json` and use Nixpacks.)
-3. Add these environment variables (Variables tab):
+1. Sign in at **railway.app** → **New Project → Deploy from GitHub** → pick the repo.
+2. In the service's **Settings → Source**, set **Root Directory** to `server`. Railway then reads `server/railway.json` and uses Nixpacks. The configured `buildCommand` builds the client first and then the server, so a single deploy produces both `client/dist` and `server/dist`.
+3. In **Variables**, add:
    - `NODE_ENV=production`
    - `MONGODB_URI=<your Atlas URI>`
    - `JWT_ACCESS_SECRET=<long random string ≥ 32 chars>`
    - `JWT_REFRESH_SECRET=<a different long random string ≥ 32 chars>`
    - `JWT_ACCESS_TTL=15m`
    - `JWT_REFRESH_TTL=7d`
-   - `CLIENT_ORIGIN=https://<your-app>.netlify.app` (set after Netlify is up — or comma-separate multiple)
    - `COOKIE_SECURE=true`
-   - `COOKIE_SAMESITE=lax` (we proxy through Netlify, so requests are same-origin — keep `lax`)
-4. Under **Settings → Networking**, click **Generate Domain**. Copy the URL (e.g. `https://taskmanager-production-abcd.up.railway.app`).
-5. Hit `https://<your-railway-url>/api/health` — should return `{"status":"ok"}`.
-6. One-time seed: in Railway, open the service shell and run `npm run seed`. (Or run it locally pointed at the Atlas URI — same effect.)
+   - `COOKIE_SAMESITE=lax`
+   - `CLIENT_ORIGIN=https://<your-railway-domain>.up.railway.app` (filled in after step 4)
+4. **Settings → Networking → Generate Domain**. Copy the URL.
+5. Paste the URL into `CLIENT_ORIGIN`; Railway redeploys automatically.
+6. Hit `https://<your-railway-domain>/api/health` to confirm `{"status":"ok"}`, then open `https://<your-railway-domain>/` to see the app.
+7. One-time seed: open the Railway service **Shell** and run `npm run seed`. (Or run it locally pointed at the same Atlas URI.)
 
-### 3 · Deploy the frontend to Netlify
+### 3 · Verify
 
-1. Open `netlify.toml` and replace the placeholder `REPLACE-WITH-RAILWAY-URL.up.railway.app` with the domain you got from Railway in step 2.4. Commit + push.
-2. Sign in at **netlify.com** → **Add new site → Import from Git**.
-3. Pick the repo. Netlify reads `netlify.toml`, so the defaults are correct:
-   - Base directory: `client/`
-   - Build command: `npm run build`
-   - Publish directory: `client/dist`
-4. Deploy. After it finishes, you'll get a `https://<random>.netlify.app` URL.
-5. Back in Railway, set `CLIENT_ORIGIN` to that Netlify URL and redeploy (Railway will restart automatically when env vars change).
-
-### 4 · Verify
-
-- Open `https://<your-app>.netlify.app` → log in as `admin@demo.test` / `Password123!`.
+- Open the Railway domain → log in as `admin@demo.test` / `Password123!`.
 - Confirm dashboard, projects, tasks, and comments all work.
-- Hard-refresh the page — you should stay logged in (refresh token flow).
+- Hard-refresh — you should stay signed in (the refresh-token cookie is first-party on the Railway domain).
 
 ### Common gotchas
 
-- **CORS error on login**: `CLIENT_ORIGIN` in Railway doesn't match the Netlify URL exactly (check `https://`, no trailing slash, www vs apex). The variable supports comma-separated origins if you have a custom domain too.
-- **`Set-Cookie` rejected by browser**: you're hitting the Railway URL directly from the browser instead of via the Netlify proxy. The proxy path (`/api/*` from your Netlify origin) is required for first-party cookies.
 - **Atlas connection refused**: in Atlas → **Network Access**, allow `0.0.0.0/0` (or Railway's egress IPs).
-- **Health check failing on Railway**: confirm `PORT` isn't hardcoded — Railway sets its own. The current `env.ts` defaults to 4000 but reads `PORT` first.
+- **Health check failing on Railway**: the server reads `PORT` from env — Railway injects its own, so don't hardcode it.
+- **404 on a deep-link refresh** (e.g. `/projects/abc`): the SPA fallback in `server/src/index.ts` handles this; if it doesn't, confirm the build placed files at `client/dist/index.html`.
+- **Build is slow first time**: client + server install separately. Subsequent deploys use Railway's cache.
 
-### Optional: split origin (no Netlify proxy)
+### Going split-origin later
 
-If you'd rather call Railway directly from the browser instead of proxying:
-- Remove the `/api/*` redirect from `netlify.toml`.
-- Add a build-time env var on Netlify: `VITE_API_URL=https://<your-railway-url>/api`, and update `client/src/api/client.ts` to use `baseURL: import.meta.env.VITE_API_URL || '/api'`.
-- On the backend, set `COOKIE_SAMESITE=none` and keep `COOKIE_SECURE=true` (both required for cross-domain cookies).
+If you ever want the API and frontend on different domains (e.g. a CDN for the static app): point the client at an absolute API URL via `VITE_API_URL`, set `COOKIE_SAMESITE=none` on the server (which forces `COOKIE_SECURE=true`), and update `CLIENT_ORIGIN` to the frontend domain.
 
 ---
 
