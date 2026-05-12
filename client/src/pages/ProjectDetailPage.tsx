@@ -180,6 +180,11 @@ export function ProjectDetailPage() {
                 <Skeleton key={i} className="h-64 w-full" />
               ))}
             </div>
+          ) : tasksQuery.isError ? (
+            <EmptyState
+              title="Couldn't load tasks"
+              description={extractApiError(tasksQuery.error).message}
+            />
           ) : (tasksQuery.data?.items ?? []).length === 0 ? (
             <EmptyState
               icon={<ListTodo className="h-6 w-6" />}
