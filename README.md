@@ -295,7 +295,7 @@ git push -u origin main
 ### 2 · Deploy to Railway
 
 1. Sign in at **railway.app** → **New Project → Deploy from GitHub** → pick the repo.
-2. In the service's **Settings → Source**, set **Root Directory** to `server`. Railway then reads `server/railway.json` and uses Nixpacks. The configured `buildCommand` builds the client first and then the server, so a single deploy produces both `client/dist` and `server/dist`.
+2. Leave **Root Directory** empty (or set it to `/`). Railway reads the root `railway.json`, runs `npm run build` from the root `package.json` (which installs + builds both client and server), then starts the server which serves both the API and the React app.
 3. In **Variables**, add:
    - `NODE_ENV=production`
    - `MONGODB_URI=<your Atlas URI>`

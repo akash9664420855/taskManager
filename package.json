@@ -1,0 +1,16 @@
+{
+  "name": "taskmanager",
+  "version": "1.0.0",
+  "private": true,
+  "description": "TaskFlow — full-stack team task manager. This root package only orchestrates the client and server builds for Railway.",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "npm install --prefix client --prefer-offline --no-audit --no-fund && npm run build --prefix client && npm install --prefix server --prefer-offline --no-audit --no-fund && npm run build --prefix server",
+    "start": "npm start --prefix server",
+    "seed": "npm run seed --prefix server",
+    "dev:server": "npm run dev --prefix server",
+    "dev:client": "npm run dev --prefix client"
+  }
+}
